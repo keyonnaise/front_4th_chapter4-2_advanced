@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 export function usePreservedCallback<Callback extends (...args: any[]) => any>(
-  callback?: Callback
+  callback?: Callback,
 ) {
   const callbackRef = useRef(callback);
 
@@ -9,8 +9,5 @@ export function usePreservedCallback<Callback extends (...args: any[]) => any>(
     callbackRef.current = callback;
   }, [callback]);
 
-  return useCallback(
-    (...args: any[]) => callbackRef.current?.(...args),
-    []
-  ) as Callback;
+  return useCallback((...args: any[]) => callbackRef.current?.(...args), []) as Callback;
 }

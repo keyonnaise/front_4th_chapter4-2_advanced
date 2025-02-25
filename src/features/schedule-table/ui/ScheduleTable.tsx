@@ -12,19 +12,13 @@ import {
   PopoverTrigger,
   Text,
 } from "@chakra-ui/react";
-import { CellSize, DAY_LABELS, 분 } from "../../../constants.ts";
-import { Schedule } from "../../../types.ts";
-import { fill2, parseHnM } from "../../../utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
-
-interface Props {
-  tableId: string;
-  schedules: Schedule[];
-  onScheduleTimeClick?: (timeInfo: { day: string; time: number }) => void;
-  onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
-}
+import { ComponentProps, Fragment, useMemo } from "react";
+import { CellSize, DAY_LABELS, 분 } from "../../../app/config";
+import { useScheduleStateContext } from "../../../app/context";
+import { Schedule } from "../../../types";
+import { fill2, parseHnM } from "../../../utils";
 
 const TIMES = [
   ...Array(18)
@@ -38,34 +32,32 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({
-  tableId,
-  schedules,
-  onScheduleTimeClick,
-  onDeleteButtonClick,
-}: Props) => {
+interface Props {
+  tableId: string;
+  onScheduleTimeClick?: (timeInfo: { day: string; time: number }) => void;
+  onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
+}
+
+export const ScheduleTable = ({ tableId, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+  const { schedulesMap } = useScheduleStateContext("ScheduleTable");
+  const schedules = schedulesMap[tableId];
+
+  const dndContext = useDndContext();
+  const activeTableId = useMemo(() => {
+    const activeId = dndContext.active?.id;
+    return activeId ? String(activeId).split(":")[0] : null;
+  }, [dndContext]);
+
   const getColor = (lectureId: string): string => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
     return colors[lectures.indexOf(lectureId) % colors.length];
   };
 
-  const dndContext = useDndContext();
-
-  const getActiveTableId = () => {
-    const activeId = dndContext.active?.id;
-    if (activeId) {
-      return String(activeId).split(":")[0];
-    }
-    return null;
-  };
-
-  const activeTableId = getActiveTableId();
-
   return (
     <Box
       position="relative"
-      outline={activeTableId === tableId ? "5px dashed" : undefined}
+      outline={tableId === activeTableId ? "5px dashed" : undefined}
       outlineColor="blue.300"
     >
       <Grid
@@ -83,12 +75,7 @@ const ScheduleTable = ({
           </Flex>
         </GridItem>
         {DAY_LABELS.map((day) => (
-          <GridItem
-            key={day}
-            borderLeft="1px"
-            borderColor="gray.300"
-            bg="gray.100"
-          >
+          <GridItem key={day} borderLeft="1px" borderColor="gray.300" bg="gray.100">
             <Flex justifyContent="center" alignItems="center" h="full">
               <Text fontWeight="bold">{day}</Text>
             </Flex>
@@ -115,9 +102,7 @@ const ScheduleTable = ({
                 bg={timeIndex > 17 ? "gray.100" : "white"}
                 cursor="pointer"
                 _hover={{ bg: "yellow.100" }}
-                onClick={() =>
-                  onScheduleTimeClick?.({ day, time: timeIndex + 1 })
-                }
+                onClick={() => onScheduleTimeClick?.({ day, time: timeIndex + 1 })}
               />
             ))}
           </Fragment>
@@ -142,16 +127,23 @@ const ScheduleTable = ({
   );
 };
 
+// Sub Components
+interface DraggableScheduleProps {
+  id: string;
+  data: Schedule;
+  onDeleteButtonClick?(): void;
+}
+
 const DraggableSchedule = ({
   id,
   data,
   bg,
   onDeleteButtonClick,
-}: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-    onDeleteButtonClick: () => void;
-  }) => {
+}: DraggableScheduleProps & ComponentProps<typeof Box>) => {
   const { day, range, room, lecture } = data;
-  const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
+  const { attributes, setNodeRef, listeners, transform } = useDraggable({
+    id,
+  });
   const leftIndex = DAY_LABELS.indexOf(day as (typeof DAY_LABELS)[number]);
   const topIndex = range[0] - 1;
   const size = range.length;
@@ -193,5 +185,3 @@ const DraggableSchedule = ({
     </Popover>
   );
 };
-
-export default ScheduleTable;

@@ -2,14 +2,11 @@ import { createContext, useContext, useMemo } from "react";
 
 export function createSafeContext<ContextValue extends object | null>(
   rootComponentName: string,
-  defaultValue?: ContextValue
+  defaultValue?: ContextValue,
 ) {
   const Context = createContext<ContextValue | undefined>(defaultValue);
 
-  function Provider({
-    children,
-    ...rest
-  }: ContextValue & { children?: React.ReactNode }) {
+  function Provider({ children, ...rest }: ContextValue & { children?: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const value = useMemo(() => rest, Object.values(rest)) as ContextValue;
     return <Context.Provider value={value}>{children}</Context.Provider>;
@@ -20,9 +17,7 @@ export function createSafeContext<ContextValue extends object | null>(
     if (ctx) return ctx;
     if (defaultValue !== undefined) return defaultValue;
 
-    throw new Error(
-      `\`${consumerName}\` must be used within \`${rootComponentName}\``
-    );
+    throw new Error(`\`${consumerName}\` must be used within \`${rootComponentName}\``);
   }
 
   Provider.displayName = rootComponentName + "Provider";
