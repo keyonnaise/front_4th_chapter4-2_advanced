@@ -29,20 +29,18 @@ import {
   Wrap,
 } from "@chakra-ui/react";
 import axios, { AxiosResponse } from "axios";
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
-import { DAY_LABELS } from "./app/config";
-import { useScheduleActionsContext } from "./app/context";
-import { usePreservedCallback } from "./shared/hooks";
-import { Lecture } from "./types";
-import { parseSchedule } from "./utils";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { DAY_LABELS } from "../../../app/config";
+import { useScheduleActionsContext } from "../../../app/context";
+import { usePreservedCallback } from "../../../shared/hooks";
+import { parseSchedule } from "../../../shared/lib";
+import { Lecture } from "../../../types";
+import { PAGE_SIZE, TIME_SLOTS } from "../constants";
 
-interface Props {
-  searchInfo: {
-    tableId: string;
-    day?: string;
-    time?: number;
-  } | null;
-  onClose: () => void;
+interface SearchInfo {
+  tableId: string;
+  day?: string;
+  time?: number;
 }
 
 interface SearchOptions {
@@ -54,52 +52,12 @@ interface SearchOptions {
   credits?: number;
 }
 
-const TIME_SLOTS = [
-  { id: 1, label: "09:00~09:30" },
-  { id: 2, label: "09:30~10:00" },
-  { id: 3, label: "10:00~10:30" },
-  { id: 4, label: "10:30~11:00" },
-  { id: 5, label: "11:00~11:30" },
-  { id: 6, label: "11:30~12:00" },
-  { id: 7, label: "12:00~12:30" },
-  { id: 8, label: "12:30~13:00" },
-  { id: 9, label: "13:00~13:30" },
-  { id: 10, label: "13:30~14:00" },
-  { id: 11, label: "14:00~14:30" },
-  { id: 12, label: "14:30~15:00" },
-  { id: 13, label: "15:00~15:30" },
-  { id: 14, label: "15:30~16:00" },
-  { id: 15, label: "16:00~16:30" },
-  { id: 16, label: "16:30~17:00" },
-  { id: 17, label: "17:00~17:30" },
-  { id: 18, label: "17:30~18:00" },
-  { id: 19, label: "18:00~18:50" },
-  { id: 20, label: "18:55~19:45" },
-  { id: 21, label: "19:50~20:40" },
-  { id: 22, label: "20:45~21:35" },
-  { id: 23, label: "21:40~22:30" },
-  { id: 24, label: "22:35~23:25" },
-];
+interface Props {
+  searchInfo: SearchInfo | null;
+  onClose(): void;
+}
 
-const PAGE_SIZE = 100;
-
-const fetchMajors = () => axios.get<Lecture[]>("/schedules-majors.json");
-const fetchLiberalArts = () => axios.get<Lecture[]>("/schedules-liberal-arts.json");
-
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => {
-  return await Promise.all([
-    (console.log("API Call 1", performance.now()), fetchMajors()),
-    (console.log("API Call 2", performance.now()), fetchLiberalArts()),
-    (console.log("API Call 3", performance.now()), fetchMajors()),
-    (console.log("API Call 4", performance.now()), fetchLiberalArts()),
-    (console.log("API Call 5", performance.now()), fetchMajors()),
-    (console.log("API Call 6", performance.now()), fetchLiberalArts()),
-  ]);
-};
-
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
-export const SearchDialog = ({ searchInfo, onClose }: Props) => {
+export const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleActionsContext("SearchDialog");
 
   const [lectures, setLectures] = useState<Lecture[]>([]);
@@ -113,50 +71,49 @@ export const SearchDialog = ({ searchInfo, onClose }: Props) => {
   });
 
   const filteredLectures = useMemo(() => {
-    const { query, grades, days, times, majors, credits } = searchOptions;
-
+    const { query = "", grades, days, times, majors, credits } = searchOptions;
     return lectures.filter((lecture) => {
       const matchesQuery =
-        lecture.title.toLowerCase().includes((query || "").toLowerCase()) ||
-        lecture.id.toLowerCase().includes((query || "").toLowerCase());
+        lecture.title.toLowerCase().includes(query.toLowerCase()) ||
+        lecture.id.toLowerCase().includes(query.toLowerCase());
+      const matchesDay =
+        days.length !== 0
+          ? (lecture.schedule ? parseSchedule(lecture.schedule) : []).some((s) =>
+              days.includes(s.day),
+            )
+          : true;
+      const matchesTime =
+        times.length !== 0
+          ? (lecture.schedule ? parseSchedule(lecture.schedule) : []).some((s) =>
+              s.range.some((time) => times.includes(time)),
+            )
+          : true;
       const matchesGrade = grades.length === 0 || grades.includes(lecture.grade);
       const matchesMajor = majors.length === 0 || majors.includes(lecture.major);
       const matchesCredit = !credits || lecture.credits.startsWith(String(credits));
-      const scheduleMatches = lecture.schedule
-        ? parseSchedule(lecture.schedule).some(
-            (task) =>
-              (days.length === 0 || days.includes(task.day)) &&
-              (times.length === 0 || task.range.some((current) => times.includes(current))),
-          )
-        : true;
 
-      return matchesQuery && matchesGrade && matchesMajor && matchesCredit && scheduleMatches;
+      return (
+        matchesQuery && matchesDay && matchesTime && matchesGrade && matchesMajor && matchesCredit
+      );
     });
   }, [lectures, searchOptions]);
 
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-
-  const allMajors = useMemo(
-    () => [...new Set(lectures.map((lecture) => lecture.major))],
-    [lectures],
-  );
+  const allMajors = [...new Set(lectures.map((lecture) => lecture.major))];
 
   const changeSearchOption = usePreservedCallback(
     (field: keyof SearchOptions, value: SearchOptions[typeof field]) => {
       setPage(1);
       setSearchOptions({ ...searchOptions, [field]: value });
-      // loaderWrapperRef.current?.scrollTo(0, 0);
     },
   );
 
   const addSchedule = usePreservedCallback((lecture: Lecture) => {
     if (!searchInfo) return;
-
     const { tableId } = searchInfo;
     const schedules = parseSchedule(lecture.schedule).map((schedule) => ({ ...schedule, lecture }));
     setSchedulesMap((prev) => ({ ...prev, [tableId]: [...prev[tableId], ...schedules] }));
-
     onClose();
   });
 
@@ -206,15 +163,14 @@ export const SearchDialog = ({ searchInfo, onClose }: Props) => {
       </ModalContent>
     </Modal>
   );
-};
+});
 
-// Sub components
+// Sub component
 interface FilterPanelProps {
   allMajors: string[];
   searchOptions: SearchOptions;
   changeSearchOption(field: keyof SearchOptions, value: SearchOptions[typeof field]): void;
 }
-
 const FilterPanel = memo(({ allMajors, searchOptions, changeSearchOption }: FilterPanelProps) => {
   return (
     <>
@@ -228,7 +184,6 @@ const FilterPanel = memo(({ allMajors, searchOptions, changeSearchOption }: Filt
           onChange={(e) => changeSearchOption("credits", e.target.value)}
         />
       </HStack>
-
       <HStack spacing={4}>
         <GradeCheckbox
           value={searchOptions.grades}
@@ -239,7 +194,6 @@ const FilterPanel = memo(({ allMajors, searchOptions, changeSearchOption }: Filt
           onChange={(value) => changeSearchOption("days", String(value))}
         />
       </HStack>
-
       <HStack spacing={4}>
         <TimeSelector
           times={searchOptions.times}
@@ -256,12 +210,10 @@ const FilterPanel = memo(({ allMajors, searchOptions, changeSearchOption }: Filt
     </>
   );
 });
-
 interface SearchKeywordFieldProps {
   value: string | undefined;
   onChange: React.ChangeEventHandler<HTMLInputElement>;
 }
-
 const SearchKeywordField = memo(
   ({ value, onChange }: SearchKeywordFieldProps) => {
     return (
@@ -273,12 +225,10 @@ const SearchKeywordField = memo(
   },
   (prevProps, nextProps) => prevProps.value === nextProps.value,
 );
-
 interface CreditFieldProps {
   value: number | undefined;
   onChange: React.ChangeEventHandler<HTMLSelectElement>;
 }
-
 const CreditField = memo(
   ({ value, onChange }: CreditFieldProps) => {
     return (
@@ -295,12 +245,10 @@ const CreditField = memo(
   },
   (prevProps, nextProps) => prevProps.value === nextProps.value,
 );
-
 interface GradeCheckboxProps {
   value: (string | number)[];
   onChange(value: (string | number)[]): void;
 }
-
 const GradeCheckbox = memo(
   ({ value, onChange }: GradeCheckboxProps) => {
     return (
@@ -320,12 +268,10 @@ const GradeCheckbox = memo(
   },
   (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
 );
-
 interface DayCheckBoxProps {
   value: (string | number)[];
   onChange(value: (string | number)[]): void;
 }
-
 const DayCheckbox = memo(
   ({ value, onChange }: DayCheckBoxProps) => {
     return (
@@ -345,13 +291,11 @@ const DayCheckbox = memo(
   },
   (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
 );
-
 interface TimeSelectorProps {
   times: number[];
   value: (string | number)[];
   onChange(value: (string | number)[]): void;
 }
-
 const TimeSelector = memo(
   ({ times, value, onChange }: TimeSelectorProps) => {
     return (
@@ -391,14 +335,12 @@ const TimeSelector = memo(
   },
   (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
 );
-
 interface MajorSelectorProps {
   allMajors: string[];
   majors: string[];
   value: (string | number)[];
   onChange(value: (string | number)[]): void;
 }
-
 const MajorSelector = memo(
   ({ majors, allMajors, value, onChange }: MajorSelectorProps) => {
     return (
@@ -436,7 +378,6 @@ const MajorSelector = memo(
   },
   (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
 );
-
 interface LectureListProps {
   lectures: Lecture[];
   page: number;
@@ -444,28 +385,27 @@ interface LectureListProps {
   addSchedule(lecture: Lecture): void;
   onLoad(): void;
 }
-
 const LectureList = memo(({ lectures, page, lastPage, addSchedule, onLoad }: LectureListProps) => {
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    loaderWrapperRef.current?.scrollTo(0, 0);
+  }, [lectures]);
+
+  useEffect(() => {
     const $loader = loaderRef.current;
     const $loaderWrapper = loaderWrapperRef.current;
-
     if (!$loader || !$loaderWrapper) {
       return;
     }
-
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && page < lastPage) onLoad();
       },
       { threshold: 0, root: $loaderWrapper },
     );
-
     observer.observe($loader);
-
     return () => observer.unobserve($loader);
   }, [lastPage, page, onLoad]);
 
@@ -484,7 +424,6 @@ const LectureList = memo(({ lectures, page, lastPage, addSchedule, onLoad }: Lec
           </Tr>
         </Thead>
       </Table>
-
       <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
         <Table size="sm" variant="striped">
           <Tbody>
@@ -510,3 +449,26 @@ const LectureList = memo(({ lectures, page, lastPage, addSchedule, onLoad }: Lec
     </Box>
   );
 });
+
+// Utils
+const fetchMajors = () => axios.get<Lecture[]>("/schedules-majors.json");
+const fetchLiberalArts = () => axios.get<Lecture[]>("/schedules-liberal-arts.json");
+
+// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
+const fetchAllLectures = (() => {
+  let temp: AxiosResponse<Lecture[]>[];
+
+  return async () => {
+    if (temp === undefined) {
+      temp = await Promise.all([
+        (console.log("API Call 1", performance.now()), fetchMajors()),
+        (console.log("API Call 2", performance.now()), fetchLiberalArts()),
+        (console.log("API Call 3", performance.now()), fetchMajors()),
+        (console.log("API Call 4", performance.now()), fetchLiberalArts()),
+        (console.log("API Call 5", performance.now()), fetchMajors()),
+        (console.log("API Call 6", performance.now()), fetchLiberalArts()),
+      ]);
+    }
+    return temp;
+  };
+})();

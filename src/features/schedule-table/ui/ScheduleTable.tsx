@@ -17,8 +17,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment, memo, useMemo } from "react";
 import { CellSize, DAY_LABELS, 분 } from "../../../app/config";
 import { useScheduleStateContext } from "../../../app/context";
+import { fill2, parseHnM } from "../../../shared/lib/scheduleUtils";
 import { Schedule } from "../../../types";
-import { fill2, parseHnM } from "../../../utils";
 
 const TIMES = [
   ...Array(18)
