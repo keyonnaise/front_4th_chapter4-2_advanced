@@ -146,7 +146,7 @@ export const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <FilterPanel
-              allMajors={allMajors}
+              majors={allMajors}
               searchOptions={searchOptions}
               changeSearchOption={changeSearchOption}
             />
@@ -167,217 +167,159 @@ export const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
 
 // Sub component
 interface FilterPanelProps {
-  allMajors: string[];
+  majors: string[];
   searchOptions: SearchOptions;
   changeSearchOption(field: keyof SearchOptions, value: SearchOptions[typeof field]): void;
 }
-const FilterPanel = memo(({ allMajors, searchOptions, changeSearchOption }: FilterPanelProps) => {
+
+const FilterPanel = memo(({ majors, searchOptions, changeSearchOption }: FilterPanelProps) => {
   return (
     <>
       <HStack spacing={4}>
-        <SearchKeywordField
-          value={searchOptions.query}
-          onChange={(e) => changeSearchOption("query", e.target.value)}
-        />
-        <CreditField
-          value={searchOptions.credits}
-          onChange={(e) => changeSearchOption("credits", e.target.value)}
-        />
+        <FormControl>
+          <FormLabel>검색어</FormLabel>
+          <Input
+            placeholder="과목명 또는 과목코드"
+            value={searchOptions.query}
+            onChange={(e) => changeSearchOption("query", e.target.value)}
+          />
+        </FormControl>
+        <FormControl>
+          <FormLabel>학점</FormLabel>
+          <Select
+            value={searchOptions.credits}
+            onChange={(e) => changeSearchOption("credits", e.target.value)}
+          >
+            <option value="">전체</option>
+            <option value="1">1학점</option>
+            <option value="2">2학점</option>
+            <option value="3">3학점</option>
+          </Select>
+        </FormControl>
       </HStack>
       <HStack spacing={4}>
-        <GradeCheckbox
+        <CheckboxField
+          label="학년"
+          options={[
+            { label: "1학년", value: 1 },
+            { label: "2학년", value: 2 },
+            { label: "3학년", value: 3 },
+            { label: "4학년", value: 4 },
+          ]}
           value={searchOptions.grades}
-          onChange={(value) => changeSearchOption("grades", value.map(Number))}
+          onChangeValue={(value) => changeSearchOption("grades", value.map(Number))}
         />
-        <DayCheckbox
+        <CheckboxField
+          label="요일"
+          options={DAY_LABELS.reduce(
+            (options, label) => [...options, { label, value: label }],
+            [] as Option[],
+          )}
           value={searchOptions.days}
-          onChange={(value) => changeSearchOption("days", String(value))}
+          onChangeValue={(value) => changeSearchOption("days", value.map(String))}
         />
       </HStack>
       <HStack spacing={4}>
-        <TimeSelector
-          times={searchOptions.times}
+        <SelectorField
+          label="시간"
+          options={TIME_SLOTS.map(({ id, label }) => ({ label, value: id }))}
           value={searchOptions.times}
-          onChange={(value) => changeSearchOption("times", value.map(Number))}
+          onChangeValue={(value) => changeSearchOption("times", value.map(Number))}
         />
-        <MajorSelector
-          allMajors={allMajors}
-          majors={searchOptions.majors}
+        <SelectorField
+          label="전공"
+          options={majors.map((major) => ({ label: major.replace(/<p>/gi, " "), value: major }))}
           value={searchOptions.majors}
-          onChange={(value) => changeSearchOption("majors", value.map(String))}
+          onChangeValue={(value) => changeSearchOption("majors", value.map(String))}
         />
       </HStack>
     </>
   );
 });
-interface SearchKeywordFieldProps {
-  value: string | undefined;
-  onChange: React.ChangeEventHandler<HTMLInputElement>;
+
+interface Option {
+  label: string;
+  value: string | number | undefined;
 }
-const SearchKeywordField = memo(
-  ({ value, onChange }: SearchKeywordFieldProps) => {
-    return (
-      <FormControl>
-        <FormLabel>검색어</FormLabel>
-        <Input placeholder="과목명 또는 과목코드" value={value} onChange={onChange} />
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => prevProps.value === nextProps.value,
-);
-interface CreditFieldProps {
-  value: number | undefined;
-  onChange: React.ChangeEventHandler<HTMLSelectElement>;
+
+/* -------------------------------------------------------------------------------------------------
+ * CheckboxField
+ * -----------------------------------------------------------------------------------------------*/
+
+interface CheckboxFieldProps {
+  label: string;
+  options: Option[];
+  value: (string | number)[] | undefined;
+  onChangeValue(value: (string | number)[]): void;
 }
-const CreditField = memo(
-  ({ value, onChange }: CreditFieldProps) => {
-    return (
-      <FormControl>
-        <FormLabel>학점</FormLabel>
-        <Select value={value} onChange={onChange}>
-          <option value="">전체</option>
-          <option value="1">1학점</option>
-          <option value="2">2학점</option>
-          <option value="3">3학점</option>
-        </Select>
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => prevProps.value === nextProps.value,
-);
-interface GradeCheckboxProps {
-  value: (string | number)[];
-  onChange(value: (string | number)[]): void;
+
+const CheckboxField = ({ label, options, value, onChangeValue }: CheckboxFieldProps) => {
+  return (
+    <FormControl>
+      <FormLabel>{label}</FormLabel>
+      <CheckboxGroup value={value} onChange={onChangeValue}>
+        <HStack spacing={4}>
+          {options.map(({ label, value }, i) => (
+            <Checkbox key={i} value={value}>
+              {label}
+            </Checkbox>
+          ))}
+        </HStack>
+      </CheckboxGroup>
+    </FormControl>
+  );
+};
+
+/* -------------------------------------------------------------------------------------------------
+ * SelectorField
+ * -----------------------------------------------------------------------------------------------*/
+
+interface SelectorFieldProps {
+  label: string;
+  options: Option[];
+  value: (string | number)[] | undefined;
+  onChangeValue(value: (string | number)[]): void;
 }
-const GradeCheckbox = memo(
-  ({ value, onChange }: GradeCheckboxProps) => {
-    return (
-      <FormControl>
-        <FormLabel>학년</FormLabel>
-        <CheckboxGroup value={value} onChange={onChange}>
-          <HStack spacing={4}>
-            {[1, 2, 3, 4].map((grade) => (
-              <Checkbox key={grade} value={grade}>
-                {grade}학년
-              </Checkbox>
-            ))}
-          </HStack>
-        </CheckboxGroup>
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
-);
-interface DayCheckBoxProps {
-  value: (string | number)[];
-  onChange(value: (string | number)[]): void;
-}
-const DayCheckbox = memo(
-  ({ value, onChange }: DayCheckBoxProps) => {
-    return (
-      <FormControl>
-        <FormLabel>요일</FormLabel>
-        <CheckboxGroup value={value} onChange={onChange}>
-          <HStack spacing={4}>
-            {DAY_LABELS.map((day) => (
-              <Checkbox key={day} value={day}>
-                {day}
-              </Checkbox>
-            ))}
-          </HStack>
-        </CheckboxGroup>
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
-);
-interface TimeSelectorProps {
-  times: number[];
-  value: (string | number)[];
-  onChange(value: (string | number)[]): void;
-}
-const TimeSelector = memo(
-  ({ times, value, onChange }: TimeSelectorProps) => {
-    return (
-      <FormControl>
-        <FormLabel>시간</FormLabel>
-        <CheckboxGroup colorScheme="green" value={value} onChange={onChange}>
-          <Wrap spacing={1} mb={2}>
-            {times
-              .sort((a, b) => a - b)
-              .map((time) => (
-                <Tag key={time} size="sm" variant="outline" colorScheme="blue">
-                  <TagLabel>{time}교시</TagLabel>
-                  <TagCloseButton onClick={() => onChange(times.filter((v) => v !== time))} />
-                </Tag>
-              ))}
-          </Wrap>
-          <Stack
-            spacing={2}
-            overflowY="auto"
-            h="100px"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius={5}
-            p={2}
-          >
-            {TIME_SLOTS.map(({ id, label }) => (
-              <Box key={id}>
-                <Checkbox key={id} size="sm" value={id}>
-                  {id}교시({label})
-                </Checkbox>
-              </Box>
-            ))}
-          </Stack>
-        </CheckboxGroup>
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
-);
-interface MajorSelectorProps {
-  allMajors: string[];
-  majors: string[];
-  value: (string | number)[];
-  onChange(value: (string | number)[]): void;
-}
-const MajorSelector = memo(
-  ({ majors, allMajors, value, onChange }: MajorSelectorProps) => {
-    return (
-      <FormControl>
-        <FormLabel>전공</FormLabel>
-        <CheckboxGroup colorScheme="green" value={value} onChange={onChange}>
-          <Wrap spacing={1} mb={2}>
-            {majors.map((major) => (
-              <Tag key={major} size="sm" variant="outline" colorScheme="blue">
-                <TagLabel>{major.split("<p>").pop()}</TagLabel>
-                <TagCloseButton onClick={() => onChange(majors.filter((v) => v !== major))} />
-              </Tag>
-            ))}
-          </Wrap>
-          <Stack
-            spacing={2}
-            overflowY="auto"
-            h="100px"
-            border="1px solid"
-            borderColor="gray.200"
-            borderRadius={5}
-            p={2}
-          >
-            {allMajors.map((major) => (
-              <Box key={major}>
-                <Checkbox key={major} size="sm" value={major}>
-                  {major.replace(/<p>/gi, " ")}
-                </Checkbox>
-              </Box>
-            ))}
-          </Stack>
-        </CheckboxGroup>
-      </FormControl>
-    );
-  },
-  (prevProps, nextProps) => JSON.stringify(prevProps.value) === JSON.stringify(nextProps.value),
-);
+
+const SelectorField = ({ label, options, value, onChangeValue }: SelectorFieldProps) => {
+  return (
+    <FormControl>
+      <FormLabel>{label}</FormLabel>
+      <CheckboxGroup colorScheme="green" value={value} onChange={onChangeValue}>
+        <Wrap spacing={1} mb={2}>
+          {value?.map((current, i) => (
+            <Tag key={i} size="sm" variant="outline" colorScheme="blue">
+              <TagLabel>{options.find((option) => option.value === current)?.label}</TagLabel>
+              <TagCloseButton
+                onClick={() => onChangeValue(value?.filter((v) => v !== current) || [])}
+              />
+            </Tag>
+          ))}
+        </Wrap>
+        <Stack
+          spacing={2}
+          overflowY="auto"
+          h="100px"
+          border="1px solid"
+          borderColor="gray.200"
+          borderRadius={5}
+          p={2}
+        >
+          {options.map(({ label, value }, i) => (
+            <Checkbox key={i} size="sm" value={value}>
+              {label}
+            </Checkbox>
+          ))}
+        </Stack>
+      </CheckboxGroup>
+    </FormControl>
+  );
+};
+
+/* -------------------------------------------------------------------------------------------------
+ * LectureList
+ * -----------------------------------------------------------------------------------------------*/
+
 interface LectureListProps {
   lectures: Lecture[];
   page: number;
@@ -385,6 +327,7 @@ interface LectureListProps {
   addSchedule(lecture: Lecture): void;
   onLoad(): void;
 }
+
 const LectureList = memo(({ lectures, page, lastPage, addSchedule, onLoad }: LectureListProps) => {
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
